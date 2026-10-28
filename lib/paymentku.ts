@@ -1,9 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 // Paymenku API as used by the official WooCommerce plugin (github.com/paymenku/plugin-woocommerce).
-// `||` rather than `??`: an empty `PAYMENTKU_BASE_URL=` line in .env must still fall back. Trailing
-// slashes are trimmed: "…/api/v1/" would produce "…/v1//transaction/create", which Paymenku 404s.
-const BASE_URL = (process.env.PAYMENTKU_BASE_URL || "https://paymenku.com/api/v1").replace(/\/+$/, "");
+// One base URL for sandbox and live; the key prefix (sk_test_ / sk_live_) picks the mode.
+const BASE_URL = "https://paymenku.com/api/v1";
 // ponytail: one fixed channel for every checkout; let the customer pick via GET /payment-channels if needed.
 const CHANNEL = process.env.PAYMENTKU_CHANNEL || "qris";
 export const SIGNATURE_HEADER = "x-paymenku-signature";
