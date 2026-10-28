@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { checkPaymentStatus, parseEvent, verifySignature } from "./paymentku.ts";
+import { checkPaymentStatus, mayCheckStatus, parseEvent, verifySignature } from "./paymentku.ts";
 
 process.env.PAYMENTKU_SECRET_KEY = "test-secret";
 process.env.PAYMENTKU_API_KEY = "sk_test_abc";
@@ -54,4 +54,14 @@ test("checkPaymentStatus reads the transaction for our order id", async () => {
 
   globalThis.fetch = reply(429, { status: "error", message: "Rate limit exceeded" });
   await assert.rejects(checkPaymentStatus("order-1"));
+});
+
+test("mayCheckStatus throttles per order and overall", () => {
+  const t = 1_000_000;
+  assert.equal(mayCheckStatus("a", t), true);
+  assert.equal(mayCheckStatus("a", t + 29_999), false, "same order within 30s");
+  assert.equal(mayCheckStatus("a", t + 30_000), true);
+  for (let i = 0; i < 18; i++) assert.equal(mayCheckStatus(`o${i}`, t + 30_000), true);
+  assert.equal(mayCheckStatus("over", t + 30_000), false, "21st check in the same minute");
+  assert.equal(mayCheckStatus("over", t + 90_000), true, "new minute window");
 });

@@ -1,8 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 // Paymenku API as used by the official WooCommerce plugin (github.com/paymenku/plugin-woocommerce).
-// `||` rather than `??`: an empty `PAYMENTKU_BASE_URL=` line in .env must still fall back.
-const BASE_URL = process.env.PAYMENTKU_BASE_URL || "https://paymenku.com/api/v1";
+// `||` rather than `??`: an empty `PAYMENTKU_BASE_URL=` line in .env must still fall back. Trailing
+// slashes are trimmed: "…/api/v1/" would produce "…/v1//transaction/create", which Paymenku 404s.
+const BASE_URL = (process.env.PAYMENTKU_BASE_URL || "https://paymenku.com/api/v1").replace(/\/+$/, "");
 // ponytail: one fixed channel for every checkout; let the customer pick via GET /payment-channels if needed.
 const CHANNEL = process.env.PAYMENTKU_CHANNEL || "qris";
 export const SIGNATURE_HEADER = "x-paymenku-signature";
@@ -29,7 +30,8 @@ export async function createInvoice(input: {
   customer: { name: string; email: string };
   returnUrl: string;
 }): Promise<{ reference: string; checkoutUrl: string }> {
-  const res = await fetch(`${BASE_URL}/transaction/create`, {
+  const url = `${BASE_URL}/transaction/create`;
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env("PAYMENTKU_API_KEY")}`,
@@ -52,7 +54,7 @@ export async function createInvoice(input: {
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
   if (!res.ok || !body || body.status === "error" || body.success === false) {
     const message = typeof body?.message === "string" ? body.message : "";
-    throw new Error(`Paymenku transaction/create failed: HTTP ${res.status} ${message}`.trim());
+    throw new Error(`Paymenku POST ${url} failed: HTTP ${res.status} ${message}`.trim());
   }
 
   const data = (body.data ?? body) as Record<string, unknown>;
@@ -110,17 +112,38 @@ export function parseEvent(rawBody: string): PaymentEvent | null {
   return event;
 }
 
+// check-status shares a 120 req/min quota per merchant, and order pages are public, so cap our share:
+// one check per order per 30s and 20 per minute overall.
+// ponytail: in-memory, per server process; move to a DB timestamp if this runs on many instances.
+const lastChecked = new Map<string, number>();
+let windowStart = 0;
+let windowCount = 0;
+
+export function mayCheckStatus(orderId: string, now: number): boolean {
+  if (now - (lastChecked.get(orderId) ?? -Infinity) < 30_000) return false;
+  if (now - windowStart >= 60_000) {
+    windowStart = now;
+    windowCount = 0;
+  }
+  if (windowCount >= 20) return false;
+  windowCount++;
+  if (lastChecked.size >= 1_000) lastChecked.clear();
+  lastChecked.set(orderId, now);
+  return true;
+}
+
 // Asks Paymenku for the transaction behind one of our orders. Used when the customer returns, so the
 // order settles even if the webhook never reaches us (e.g. the API key belongs to another merchant
 // whose webhook URL points elsewhere). Returns null if Paymenku has no such transaction.
 export async function checkPaymentStatus(orderId: string): Promise<PaymentEvent | null> {
-  const res = await fetch(`${BASE_URL}/check-status/${encodeURIComponent(orderId)}`, {
+  const url = `${BASE_URL}/check-status/${encodeURIComponent(orderId)}`;
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${env("PAYMENTKU_API_KEY")}`, Accept: "application/json" },
     signal: AbortSignal.timeout(8_000),
   });
   if (res.status === 404) return null;
   const body = (await res.json().catch(() => null)) as { data?: Record<string, unknown> } | null;
-  if (!res.ok || !body?.data) throw new Error(`Paymenku check-status failed: HTTP ${res.status}`);
+  if (!res.ok || !body?.data) throw new Error(`Paymenku GET ${url} failed: HTTP ${res.status}`);
   const event = toEvent(body.data);
   return event?.orderId === orderId ? event : null;
 }

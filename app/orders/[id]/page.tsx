@@ -5,7 +5,7 @@ import { CircleX, Clock } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ImpactPanel } from "@/components/impact";
 import type { OrderStatus } from "@/lib/database.types";
-import { checkPaymentStatus } from "@/lib/paymentku";
+import { checkPaymentStatus, mayCheckStatus } from "@/lib/paymentku";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatIDR, isUuid } from "@/lib/utils";
 
@@ -62,6 +62,7 @@ export default function OrderPage({ params }: PageProps<"/orders/[id]">) {
 // Returns true when Paymenku reports a final status, even if a concurrent render or the webhook
 // settled it first, so the caller reloads. Failures (rate limit, network) just leave it PENDING.
 async function reconcile(orderId: string): Promise<boolean> {
+  if (!mayCheckStatus(orderId, Date.now())) return false;
   try {
     const event = await checkPaymentStatus(orderId);
     if (!event?.status) return false;
@@ -103,7 +104,7 @@ async function Order({ params }: { params: PageProps<"/orders/[id]">["params"] }
 
   return (
     <>
-      {/* Each refresh re-checks Paymenku (quota: 120 req/min per merchant), so poll gently. */}
+      {/* Refreshes pick up webhook updates; Paymenku itself is re-checked at most every 30s (see mayCheckStatus). */}
       {order.status === "PENDING" && <AutoRefresh intervalMs={10_000} />}
       <p className="text-sm text-stone-600">Pesanan #{order.id.slice(0, 8)}</p>
       <h1 className="mt-1 animate-rise text-4xl font-semibold tracking-[-0.03em] text-balance text-emerald-950">
