@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafaf9;
+  --foreground: #1c1917;
 }
 
 @theme inline {
@@ -12,15 +12,144 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Motion language: things grow up out of the ground (bottom-anchored, decelerating). */
+@theme {
+  --ease-grow: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-rise: rise 0.7s var(--ease-grow) both;
+  --animate-sprout: sprout 0.6s var(--ease-grow) both;
+  --animate-unmask: unmask 0.9s var(--ease-grow) both;
+  --animate-draw: draw 1.8s var(--ease-grow) both;
+  --animate-bump: bump 0.35s var(--ease-grow);
+  --animate-tick: tick 0.25s var(--ease-grow);
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-breathe: breathe 2.4s ease-in-out infinite;
+  --animate-leave: leave 0.24s ease-in forwards;
+}
+
+/* Reduced motion keeps these opacity-only fades; the spatial versions below replace them otherwise. */
+@keyframes rise { from { opacity: 0; } }
+@keyframes sprout { from { opacity: 0; } }
+@keyframes unmask { from { opacity: 0; } }
+@keyframes draw { from { opacity: 0; } }
+@keyframes bump { from { opacity: 0.5; } }
+@keyframes tick { from { opacity: 0.4; } }
+@keyframes breathe { 50% { opacity: 0.55; } }
+@keyframes leave { to { opacity: 0; } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(28px); }
   }
+  @keyframes sprout {
+    from { opacity: 0; transform: scaleY(0.2) translateY(30%); }
+  }
+  @keyframes unmask {
+    from { transform: translateY(105%); }
+  }
+  @keyframes draw {
+    from { stroke-dashoffset: 1; }
+  }
+  @keyframes bump {
+    40% { transform: scale(1.35); }
+  }
+  @keyframes tick {
+    from { opacity: 0; transform: translateY(-60%); }
+  }
+  @keyframes breathe {
+    50% { transform: scale(1.6); opacity: 0; }
+  }
+  @keyframes leave {
+    to { opacity: 0; transform: translateX(32px) scale(0.98); }
+  }
+
+
+  /* Cards rise as they scroll into view; browsers without scroll timelines treat this as a
+     zero-length animation and show the card as-is. The range (entry 0%–75%) is set inline on the
+     element: Turbopack's CSS pipeline silently drops or chokes on animation-range. */
+  .scroll-reveal {
+    animation: rise linear both;
+    animation-timeline: view();
+  }
+
+  /* A light sweep across primary buttons on hover. */
+  .btn-shine {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .btn-shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.3) 50%, transparent 70%);
+    translate: -120% 0;
+    transition: translate 0.8s var(--ease-grow);
+    pointer-events: none;
+  }
+  .btn-shine:hover:not(:disabled)::after {
+    translate: 120% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-stone-200) 25%, var(--color-stone-100) 50%, var(--color-stone-200) 75%);
+  background-size: 200% 100%;
+}
+
+/* Route transitions (React <ViewTransition>): content slides by direction, header stays anchored. */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-group(site-header) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header) {
+  display: none;
+}
+::view-transition-new(site-header) {
+  animation: none;
+}
+::view-transition-old(.nav-forward),
+::view-transition-old(.nav-back) {
+  animation: 150ms ease-in both vt-fade reverse, 400ms var(--ease-grow) both vt-slide reverse;
+}
+::view-transition-new(.nav-forward),
+::view-transition-new(.nav-back) {
+  animation: 240ms ease-out 120ms both vt-fade, 450ms var(--ease-grow) both vt-slide;
+}
+::view-transition-old(.nav-forward) { --slide: -48px; }
+::view-transition-new(.nav-forward) { --slide: 48px; }
+::view-transition-old(.nav-back) { --slide: 48px; }
+::view-transition-new(.nav-back) { --slide: -48px; }
+
+@keyframes vt-fade {
+  from { opacity: 0; filter: blur(4px); }
+}
+/* Movement only exists without reduced motion; otherwise transitions are plain crossfades. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes vt-slide {
+    from { translate: var(--slide) 0; }
+  }
+}
+
+/* Browser surfaces in the palette. */
+::selection {
+  background: var(--color-emerald-200);
+  color: var(--color-emerald-950);
+}
+:focus-visible {
+  outline: 2px solid var(--color-emerald-600);
+  outline-offset: 2px;
+}
+html {
+  scrollbar-color: var(--color-emerald-700) var(--color-stone-100);
+  caret-color: var(--color-emerald-700);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
 }

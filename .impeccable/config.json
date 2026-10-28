@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "components/cart.tsx"
+        ],
+        "createdAt": "2026-10-28T03:54:45.854Z",
+        "reason": "Claude: disabled button is stone-600 on stone-300 (neutral gray on neutral gray, ~5:1 contrast), not gray on a hue"
+      }
+    ]
+  }
+}
